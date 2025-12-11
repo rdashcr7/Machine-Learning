@@ -52,7 +52,6 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 param_1 = {'max_depth': [None,10,20,30], 'n_estimators':[100,200,300,400],'min_samples_split':[10,20,25,40],'min_samples_leaf':[4,8,16,32], 'max_features':[None, 'sqrt','log2'], 'bootstrap':[True, False]}
 
 RF_model = RandomForestRegressor(max_depth = 20, bootstrap = True, max_features = 'sqrt', min_samples_leaf = 4, min_samples_split = 10, n_estimators = 100)
-# clf = GridSearchCV(estimator = RF_model, param_grid = param_1, cv =5, n_jobs = -1)
 
 RF_model.fit(X_train,y_train.ravel())
 
@@ -70,14 +69,11 @@ for i, feature_idx in enumerate(import_features):
     feature_name = import_feature_names[i]
     z_scale_val = import_feature_zscale_no[i]
 
-    # Compute partial dependence values
     pd_result = partial_dependence(RF_model, X_train, [feature_idx], grid_resolution=100)
-    
-    # Extract grid and partial dependence values
+
     pd_values = pd_result.average[0]  # Average partial dependence values
     pd_grid = pd_result.grid_values[0]  # Grid points for the feature
 
-    # Plot using Seaborn
     plt.figure(figsize=(60,60))
     sns.lineplot(x=pd_grid, y=pd_values, color='blue', lw=20)
     plt.title(f'Partial Dependence: {feature_name}', fontsize=150, fontweight='bold', fontname = 'arial')
@@ -92,23 +88,17 @@ for i, feature_idx in enumerate(import_features):
     
 #%% SHAP 3
 
-# Create SHAP explainer (for a tree-based model, like RandomForest)
 explainer = shap.TreeExplainer(RF_model, X_train)
 
-# Calculate SHAP values (for regression, it is a numpy array)
 shap_values = explainer.shap_values(X_train)
 
-# Function to calculate interaction SHAP values
 def calculate_interaction_value(model, X, feature_idx1, feature_idx2):
-    # Extract the prediction for the baseline (f(S)) and various subsets of features
     baseline_prediction = model.predict(X)  # f(S)
 
-    # Subset of X with feature_idx1
     X_with_feature1 = X.copy()
     X_with_feature1[:, feature_idx2] = 0  # Set feature idx2 to zero (i.e., S ∪ {i})
     prediction_with_feature1 = model.predict(X_with_feature1)  # f(S ∪ {i})
 
-    # Subset of X with feature_idx2
     X_with_feature2 = X.copy()
     X_with_feature2[:, feature_idx1] = 0  # Set feature idx1 to zero (i.e., S ∪ {j})
     prediction_with_feature2 = model.predict(X_with_feature2)  # f(S ∪ {j})
@@ -117,55 +107,46 @@ def calculate_interaction_value(model, X, feature_idx1, feature_idx2):
     X_with_both_features = X.copy()
     prediction_with_both_features = model.predict(X_with_both_features)  # f(S ∪ {i,j})
 
-    # Calculate the interaction SHAP value using the formula
     interaction_values = prediction_with_both_features - prediction_with_feature1 - prediction_with_feature2 + baseline_prediction
     
     return interaction_values
 
-# Loop through pairs of important features
 for idx1 in range(9):
     for idx2 in range(9):
-        # Calculate the interaction by measuring the interaction SHAP values
         interaction_values = calculate_interaction_value(RF_model, X_train, import_features[idx1], import_features[idx2])
         
-        # Calculate the maximum interaction value (you could adjust this threshold based on your data)
         max_interaction_value = np.max(interaction_values)
         
-        # Only plot if the maximum interaction value is greater than 0.5
         if max_interaction_value > 1.5:
-            # Create a dataframe for seaborn plot
             data = {
                 f'SHAP Values for {import_feature_names[idx1]}': shap_values[:, import_features[idx1]], 
                 f'SHAP Values for {import_feature_names[idx2]}': shap_values[:, import_features[idx2]],
-                'Interaction SHAP Values': interaction_values  # Interaction SHAP values for coloring
+                'Interaction SHAP Values': interaction_values 
             }
 
             df = pd.DataFrame(data)
             
-            # Use Seaborn to create the scatter plot
             plt.figure(figsize=(80,60))
             scatter = sns.scatterplot(
                 x=f'SHAP Values for {import_feature_names[idx1]}',
                 y=f'SHAP Values for {import_feature_names[idx2]}',
-                hue='Interaction SHAP Values',  # Color the points based on SHAP interaction values
-                palette='viridis',  # Use the 'viridis' colormap
+                hue='Interaction SHAP Values', 
+                palette='viridis',
                 data=df,
-                s=5000,  # Marker size
-                edgecolor='k',  # Black edge color for points
-                legend=None  # Remove legend
+                s=5000, 
+                edgecolor='k', 
+                legend=None  
             )
             
-            # Add colorbar with Arial font
-            norm = plt.Normalize(df['Interaction SHAP Values'].min(), df['Interaction SHAP Values'].max())  # Normalize the color scale
+            norm = plt.Normalize(df['Interaction SHAP Values'].min(), df['Interaction SHAP Values'].max()) 
             sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
-            sm.set_array([])  # Empty array for the colorbar
-            cbar = plt.colorbar(sm, ax=plt.gca())  # Add colorbar
+            sm.set_array([])  
+            cbar = plt.colorbar(sm, ax=plt.gca()) 
             cbar.ax.tick_params(labelsize=150)
-            for label in cbar.ax.get_yticklabels():  # Modify tick labels directly
-                label.set_fontname('Arial')  # Set font type
-                label.set_fontweight('bold')  # Set font size
+            for label in cbar.ax.get_yticklabels(): 
+                label.set_fontname('Arial') 
+                label.set_fontweight('bold')
 
-            # Set labels and title with Arial font
             plt.xlabel(f'Shapley Values for {import_feature_names[idx1]}', fontsize=150, fontname='Arial', fontweight='bold')
             plt.ylabel(f'Shapley Values for {import_feature_names[idx2]}', fontsize=150, fontname='Arial', fontweight='bold')
             plt.xticks(fontsize = 150, fontname = 'Arial', fontweight='bold')
@@ -173,9 +154,9 @@ for idx1 in range(9):
             plt.title(f'SHAP Interaction',
                       fontsize=200, fontweight='bold', fontname='Arial')
 
-            plt.grid(True)  # Enable grid
-            plt.tight_layout()  # Improve spacing
+            plt.grid(True)
+            plt.tight_layout()
 
-            # Save the plot with high DPI
             plt.savefig(f'shap_interaction_{import_feature_names[idx1]}_{import_feature_names[idx2]}.png', dpi=500)
             plt.show()
+
